@@ -1,10 +1,17 @@
 --[[
-    Gemini DEX Client - v1.0.1 (Gemini 1.5 & Patched)
+    Gemini DEX Client - v1.0.2 (Live Workspace Watcher)
 
     Description:
     This script provides an in-game interface to chat with Google's Gemini AI.
     It performs a comprehensive "DEX" scan of the game, player, server, and executor
     to provide the AI with deep context for its answers.
+
+    Changes in v1.0.2:
+    - Added Live DEX Hierarchy Watcher
+    - Real-time workspace monitoring and display
+    - Mobile-optimized GUI for workspace hierarchy
+    - Integration with Gemini context for better AI responses
+    - Expandable tree view for workspace items
 
     Changes in v1.0.1:
     - Added Executor Detection System
@@ -26,6 +33,7 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TextChatService = game:GetService("TextChatService")
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 
 --// Local Player
 local player = Players.LocalPlayer
@@ -296,7 +304,8 @@ function GameScanner:GetFullState()
         game = { name = success and gameInfo.Name or "Unknown Game", id = game.PlaceId },
         server = self:GetServerInfo(),
         player = { name = player.Name, stats = leaderstats, inventory = inventory },
-        executor = ExecutorInfo -- New: Include executor information
+        executor = ExecutorInfo, -- Include executor information
+        workspace_hierarchy = WorkspaceWatcher:GetHierarchyForGemini() -- New: Live workspace data
     }
     return state
 end
@@ -500,6 +509,393 @@ function GUI.Create(instanceType, properties)
     return inst
 end
 
+--==============================================================================
+--// Live Workspace Scanner (DEX Hierarchy Watcher)
+--==============================================================================
+local WorkspaceWatcher = {}
+WorkspaceWatcher.isScanning = false
+WorkspaceWatcher.hierarchyData = {}
+WorkspaceWatcher.updateCallbacks = {}
+WorkspaceWatcher.scanDepth = 3 -- Default scan depth
+WorkspaceWatcher.maxItemsPerLevel = 50 -- Prevent lag from too many items
+
+function WorkspaceWatcher:AddUpdateCallback(callback)
+    table.insert(self.updateCallbacks, callback)
+end
+
+function WorkspaceWatcher:RemoveUpdateCallback(callback)
+    for i, cb in ipairs(self.updateCallbacks) do
+        if cb == callback then
+            table.remove(self.updateCallbacks, i)
+            break
+        end
+    end
+end
+
+function WorkspaceWatcher:NotifyCallbacks()
+    for _, callback in ipairs(self.updateCallbacks) do
+        pcall(callback, self.hierarchyData)
+    end
+end
+
+function WorkspaceWatcher:ScanInstance(instance, depth, maxDepth)
+    if depth > maxDepth then return nil end
+    
+    local itemData = {
+        Name = instance.Name,
+        ClassName = instance.ClassName,
+        Parent = instance.Parent and instance.Parent.Name or "nil",
+        Children = {},
+        Properties = {},
+        Depth = depth
+    }
+    
+    -- Collect key properties based on class type
+    if instance:IsA("Part") then
+        itemData.Properties.Size = tostring(instance.Size)
+        itemData.Properties.Position = tostring(instance.Position)
+        itemData.Properties.Material = tostring(instance.Material)
+        itemData.Properties.CanCollide = tostring(instance.CanCollide)
+    elseif instance:IsA("Model") then
+        itemData.Properties.PrimaryPart = instance.PrimaryPart and instance.PrimaryPart.Name or "None"
+    elseif instance:IsA("Humanoid") then
+        itemData.Properties.Health = tostring(instance.Health)
+        itemData.Properties.MaxHealth = tostring(instance.MaxHealth)
+        itemData.Properties.WalkSpeed = tostring(instance.WalkSpeed)
+    elseif instance:IsA("Script") or instance:IsA("LocalScript") then
+        itemData.Properties.Enabled = tostring(instance.Enabled)
+        itemData.Properties.RunContext = instance:IsA("LocalScript") and "Client" or "Server"
+    end
+    
+    -- Scan children (limited to prevent lag)
+    local children = instance:GetChildren()
+    local childCount = 0
+    for _, child in ipairs(children) do
+        if childCount >= self.maxItemsPerLevel then
+            -- Add indicator for more items
+            table.insert(itemData.Children, {
+                Name = "... (" .. (#children - childCount) .. " more items)",
+                ClassName = "MoreItems",
+                Children = {},
+                Properties = {},
+                Depth = depth + 1
+            })
+            break
+        end
+        
+        local childData = self:ScanInstance(child, depth + 1, maxDepth)
+        if childData then
+            table.insert(itemData.Children, childData)
+            childCount = childCount + 1
+        end
+    end
+    
+    return itemData
+end
+
+function WorkspaceWatcher:PerformScan()
+    if not self.isScanning then return end
+    
+    local newHierarchy = {}
+    
+    -- Scan main workspace items
+    local workspaceChildren = Workspace:GetChildren()
+    local itemCount = 0
+    
+    for _, child in ipairs(workspaceChildren) do
+        if itemCount >= self.maxItemsPerLevel then
+            table.insert(newHierarchy, {
+                Name = "... (" .. (#workspaceChildren - itemCount) .. " more items)",
+                ClassName = "MoreItems",
+                Children = {},
+                Properties = {},
+                Depth = 0
+            })
+            break
+        end
+        
+        local itemData = self:ScanInstance(child, 0, self.scanDepth)
+        if itemData then
+            table.insert(newHierarchy, itemData)
+            itemCount = itemCount + 1
+        end
+    end
+    
+    self.hierarchyData = newHierarchy
+    self:NotifyCallbacks()
+end
+
+function WorkspaceWatcher:StartScanning()
+    if self.isScanning then return end
+    
+    self.isScanning = true
+    print("Live DEX Watcher: Started scanning workspace")
+    
+    -- Initial scan
+    self:PerformScan()
+    
+    -- Set up periodic scanning (every 2 seconds to balance performance)
+    self.scanConnection = task.spawn(function()
+        while self.isScanning do
+            task.wait(2)
+            self:PerformScan()
+        end
+    end)
+    
+    -- Also scan on workspace changes for more responsive updates
+    self.childAddedConnection = Workspace.ChildAdded:Connect(function()
+        if self.isScanning then
+            task.wait(0.1) -- Small delay to batch multiple changes
+            self:PerformScan()
+        end
+    end)
+    
+    self.childRemovedConnection = Workspace.ChildRemoved:Connect(function()
+        if self.isScanning then
+            task.wait(0.1)
+            self:PerformScan()
+        end
+    end)
+end
+
+function WorkspaceWatcher:StopScanning()
+    if not self.isScanning then return end
+    
+    self.isScanning = false
+    print("Live DEX Watcher: Stopped scanning workspace")
+    
+    if self.scanConnection then
+        task.cancel(self.scanConnection)
+        self.scanConnection = nil
+    end
+    
+    if self.childAddedConnection then
+        self.childAddedConnection:Disconnect()
+        self.childAddedConnection = nil
+    end
+    
+    if self.childRemovedConnection then
+        self.childRemovedConnection:Disconnect()
+        self.childRemovedConnection = nil
+    end
+end
+
+function WorkspaceWatcher:SetScanDepth(depth)
+    self.scanDepth = math.max(1, math.min(5, depth)) -- Clamp between 1-5
+    if self.isScanning then
+        self:PerformScan() -- Refresh with new depth
+    end
+end
+
+function WorkspaceWatcher:GetHierarchyForGemini()
+    -- Create a simplified version for Gemini context
+    local function simplifyItem(item, maxDepth, currentDepth)
+        if currentDepth >= maxDepth then return nil end
+        
+        local simplified = {
+            name = item.Name,
+            class = item.ClassName,
+            children_count = #item.Children
+        }
+        
+        -- Include key properties
+        if item.Properties.Size then simplified.size = item.Properties.Size end
+        if item.Properties.Position then simplified.position = item.Properties.Position end
+        if item.Properties.Health then simplified.health = item.Properties.Health end
+        
+        -- Include some children
+        if #item.Children > 0 and currentDepth < maxDepth - 1 then
+            simplified.children = {}
+            for i = 1, math.min(3, #item.Children) do -- Limit to 3 children for context
+                local childSimplified = simplifyItem(item.Children[i], maxDepth, currentDepth + 1)
+                if childSimplified then
+                    table.insert(simplified.children, childSimplified)
+                end
+            end
+        end
+        
+        return simplified
+    end
+    
+    local simplified = {}
+    for i = 1, math.min(10, #self.hierarchyData) do -- Limit to 10 top-level items
+        local itemSimplified = simplifyItem(self.hierarchyData[i], 2, 0) -- Max 2 levels for context
+        if itemSimplified then
+            table.insert(simplified, itemSimplified)
+        end
+    end
+    
+    return simplified
+end
+
+--==============================================================================
+--// Live DEX GUI Manager
+--==============================================================================
+local LiveDEXGUI = {}
+LiveDEXGUI.expandedItems = {} -- Track which items are expanded
+
+function LiveDEXGUI:CreateHierarchyFrame(parent)
+    local hierarchyFrame = GUI.Create("Frame", {
+        Parent = parent,
+        Size = UDim2.new(1, 0, 1, -40),
+        Position = UDim2.new(0, 0, 0, 40),
+        BackgroundColor3 = Color3.fromRGB(32, 34, 37),
+        BorderSizePixel = 0
+    })
+    GUI.Create("UICorner", { Parent = hierarchyFrame, CornerRadius = UDim.new(0, 6) })
+    
+    local scrollFrame = GUI.Create("ScrollingFrame", {
+        Parent = hierarchyFrame,
+        Size = UDim2.new(1, -10, 1, -10),
+        Position = UDim2.new(0, 5, 0, 5),
+        BackgroundTransparency = 1,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100),
+        ScrollBarThickness = 8
+    })
+    
+    local listLayout = GUI.Create("UIListLayout", {
+        Parent = scrollFrame,
+        FillDirection = Enum.FillDirection.Vertical,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 2)
+    })
+    
+    return scrollFrame, listLayout
+end
+
+function LiveDEXGUI:CreateItemFrame(item, parent, layoutOrder)
+    local itemFrame = GUI.Create("Frame", {
+        Parent = parent,
+        Size = UDim2.new(1, -20, 0, 25),
+        BackgroundColor3 = item.ClassName == "MoreItems" and Color3.fromRGB(45, 47, 50) or Color3.fromRGB(40, 42, 46),
+        BorderSizePixel = 0,
+        LayoutOrder = layoutOrder
+    })
+    GUI.Create("UICorner", { Parent = itemFrame, CornerRadius = UDim.new(0, 4) })
+    
+    -- Indentation based on depth
+    local indentSize = item.Depth * 20
+    
+    -- Expand/Collapse button (only if has children)
+    local expandBtn = nil
+    if #item.Children > 0 and item.ClassName ~= "MoreItems" then
+        expandBtn = GUI.Create("TextButton", {
+            Parent = itemFrame,
+            Size = UDim2.new(0, 20, 0, 20),
+            Position = UDim2.new(0, indentSize + 2, 0.5, -10),
+            BackgroundTransparency = 1,
+            Text = self.expandedItems[item.Name .. "_" .. item.Depth] and "▼" or "▶",
+            TextColor3 = Color3.fromRGB(150, 150, 150),
+            Font = Enum.Font.SourceSansBold,
+            TextSize = 12
+        })
+    end
+    
+    -- Item icon based on class
+    local iconText = "📁" -- Default folder icon
+    if item.ClassName == "Part" then iconText = "🧊"
+    elseif item.ClassName == "Model" then iconText = "🏗️"
+    elseif item.ClassName == "Script" then iconText = "📜"
+    elseif item.ClassName == "LocalScript" then iconText = "📝"
+    elseif item.ClassName == "Humanoid" then iconText = "🚶"
+    elseif item.ClassName == "Camera" then iconText = "📷"
+    elseif item.ClassName == "MoreItems" then iconText = "⋯"
+    end
+    
+    local iconLabel = GUI.Create("TextLabel", {
+        Parent = itemFrame,
+        Size = UDim2.new(0, 20, 1, 0),
+        Position = UDim2.new(0, indentSize + (expandBtn and 25 or 5), 0, 0),
+        BackgroundTransparency = 1,
+        Text = iconText,
+        TextColor3 = Color3.fromRGB(200, 200, 200),
+        Font = Enum.Font.SourceSans,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Center
+    })
+    
+    -- Item name and class
+    local nameLabel = GUI.Create("TextLabel", {
+        Parent = itemFrame,
+        Size = UDim2.new(1, -(indentSize + 50), 1, 0),
+        Position = UDim2.new(0, indentSize + 30, 0, 0),
+        BackgroundTransparency = 1,
+        Text = item.Name .. " (" .. item.ClassName .. ")",
+        TextColor3 = item.ClassName == "MoreItems" and Color3.fromRGB(120, 120, 120) or Color3.fromRGB(220, 220, 220),
+        Font = Enum.Font.SourceSans,
+        TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd
+    })
+    
+    -- Properties tooltip on hover (mobile-friendly - show on click)
+    if #item.Properties > 0 and item.ClassName ~= "MoreItems" then
+        local function showProperties()
+            local propText = ""
+            for key, value in pairs(item.Properties) do
+                propText = propText .. key .. ": " .. value .. "\n"
+            end
+            if propText ~= "" then
+                -- Simple property display in the response area
+                print("Properties for " .. item.Name .. ":\n" .. propText)
+            end
+        end
+        
+        nameLabel.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+                showProperties()
+            end
+        end)
+    end
+    
+    return itemFrame, expandBtn
+end
+
+function LiveDEXGUI:UpdateHierarchyDisplay(scrollFrame, hierarchyData)
+    -- Clear existing items
+    for _, child in ipairs(scrollFrame:GetChildren()) do
+        if child:IsA("Frame") then
+            child:Destroy()
+        end
+    end
+    
+    local layoutOrder = 0
+    local totalHeight = 0
+    
+    local function addItemsRecursively(items, parent)
+        for _, item in ipairs(items) do
+            layoutOrder = layoutOrder + 1
+            local itemFrame, expandBtn = self:CreateItemFrame(item, parent, layoutOrder)
+            totalHeight = totalHeight + 27 -- 25 height + 2 padding
+            
+            if expandBtn then
+                expandBtn.MouseButton1Click:Connect(function()
+                    local key = item.Name .. "_" .. item.Depth
+                    self.expandedItems[key] = not self.expandedItems[key]
+                    expandBtn.Text = self.expandedItems[key] and "▼" or "▶"
+                    
+                    -- Refresh display
+                    self:UpdateHierarchyDisplay(scrollFrame, hierarchyData)
+                end)
+            end
+            
+            -- Add children if expanded
+            if #item.Children > 0 and self.expandedItems[item.Name .. "_" .. item.Depth] then
+                addItemsRecursively(item.Children, parent)
+            end
+        end
+    end
+    
+    addItemsRecursively(hierarchyData, scrollFrame)
+    
+    -- Update canvas size
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, totalHeight)
+end
+
+--==============================================================================
+--// GUI Manager
+--==============================================================================
 local mainFrame = GUI.Create("Frame", {
     Parent = screenGui,
     Size = UDim2.new(0, 480, 0, 360),
@@ -520,7 +916,7 @@ GUI.Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = titleBar })
 
 local titleLabel = GUI.Create("TextLabel", {
     Parent = titleBar,
-    Size = UDim2.new(1, -120, 1, 0),
+    Size = UDim2.new(1, -200, 1, 0),
     Position = UDim2.fromScale(0.02, 0),
     BackgroundTransparency = 1,
     Text = "🤖 Gemini 1.5 DEX Client - " .. ExecutorInfo.name,
@@ -528,6 +924,92 @@ local titleLabel = GUI.Create("TextLabel", {
     TextColor3 = Color3.fromRGB(220, 221, 222),
     TextSize = 16,
     TextXAlignment = Enum.TextXAlignment.Left
+})
+
+-- Live DEX toggle button
+local dexToggleBtn = GUI.Create("TextButton", {
+    Parent = titleBar,
+    Size = UDim2.new(0, 70, 0, 24),
+    Position = UDim2.new(1, -185, 0.5, -12),
+    BackgroundColor3 = Color3.fromRGB(64, 68, 75),
+    TextColor3 = Color3.fromRGB(235, 235, 235),
+    Font = Enum.Font.SourceSansBold,
+    TextSize = 12,
+    Text = "Live DEX"
+})
+GUI.Create("UICorner", { Parent = dexToggleBtn, CornerRadius = UDim.new(0, 6) })
+
+-- Create Live DEX Watcher Frame
+local dexFrame = GUI.Create("Frame", {
+    Parent = screenGui,
+    Size = UDim2.new(0, 320, 0, 400),
+    Position = UDim2.new(0.5, 180, 0.5, -200),
+    BackgroundColor3 = Color3.fromRGB(28, 29, 33),
+    BorderSizePixel = 0,
+    Active = true,
+    Draggable = true,
+    Visible = false
+})
+GUI.Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = dexFrame })
+
+local dexTitleBar = GUI.Create("Frame", {
+    Parent = dexFrame,
+    Size = UDim2.new(1, 0, 0, 35),
+    BackgroundColor3 = Color3.fromRGB(40, 41, 46)
+})
+GUI.Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = dexTitleBar })
+
+local dexTitleLabel = GUI.Create("TextLabel", {
+    Parent = dexTitleBar,
+    Size = UDim2.new(1, -80, 1, 0),
+    Position = UDim2.fromScale(0.02, 0),
+    BackgroundTransparency = 1,
+    Text = "🔍 Live DEX Watcher",
+    Font = Enum.Font.SourceSansBold,
+    TextColor3 = Color3.fromRGB(220, 221, 222),
+    TextSize = 14,
+    TextXAlignment = Enum.TextXAlignment.Left
+})
+
+-- DEX Control buttons
+local scanToggleBtn = GUI.Create("TextButton", {
+    Parent = dexTitleBar,
+    Size = UDim2.new(0, 35, 0, 24),
+    Position = UDim2.new(1, -75, 0.5, -12),
+    BackgroundColor3 = Color3.fromRGB(64, 68, 75),
+    TextColor3 = Color3.fromRGB(235, 235, 235),
+    Font = Enum.Font.SourceSansBold,
+    TextSize = 12,
+    Text = "▶"
+})
+GUI.Create("UICorner", { Parent = scanToggleBtn, CornerRadius = UDim.new(0, 6) })
+
+local closeBtn = GUI.Create("TextButton", {
+    Parent = dexTitleBar,
+    Size = UDim2.new(0, 35, 0, 24),
+    Position = UDim2.new(1, -35, 0.5, -12),
+    BackgroundColor3 = Color3.fromRGB(128, 60, 60),
+    TextColor3 = Color3.fromRGB(235, 235, 235),
+    Font = Enum.Font.SourceSansBold,
+    TextSize = 12,
+    Text = "✕"
+})
+GUI.Create("UICorner", { Parent = closeBtn, CornerRadius = UDim.new(0, 6) })
+
+-- DEX Hierarchy display
+local dexScrollFrame, dexListLayout = LiveDEXGUI:CreateHierarchyFrame(dexFrame)
+
+-- DEX Status label
+local dexStatusLabel = GUI.Create("TextLabel", {
+    Parent = dexFrame,
+    Size = UDim2.new(1, -10, 0, 30),
+    Position = UDim2.new(0, 5, 0, 5),
+    BackgroundTransparency = 1,
+    Font = Enum.Font.SourceSans,
+    TextColor3 = Color3.fromRGB(150, 150, 150),
+    TextSize = 12,
+    Text = "Click ▶ to start scanning workspace",
+    TextWrapped = true
 })
 
 -- Auto-Chat toggle
@@ -774,4 +1256,43 @@ end)
 pcall(function()
     screenGui.IgnoreGuiInset = true
     screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+end)
+
+--==============================================================================
+--// DEX Event Handlers
+--==============================================================================
+
+-- DEX Toggle button
+dexToggleBtn.MouseButton1Click:Connect(function()
+    dexFrame.Visible = not dexFrame.Visible
+    dexToggleBtn.BackgroundColor3 = dexFrame.Visible and Color3.fromRGB(56, 97, 56) or Color3.fromRGB(64, 68, 75)
+end)
+
+-- Scan Toggle button
+scanToggleBtn.MouseButton1Click:Connect(function()
+    if WorkspaceWatcher.isScanning then
+        WorkspaceWatcher:StopScanning()
+        scanToggleBtn.Text = "▶"
+        scanToggleBtn.BackgroundColor3 = Color3.fromRGB(64, 68, 75)
+        dexStatusLabel.Text = "Scanning stopped. Click ▶ to restart."
+    else
+        WorkspaceWatcher:StartScanning()
+        scanToggleBtn.Text = "⏸"
+        scanToggleBtn.BackgroundColor3 = Color3.fromRGB(56, 97, 56)
+        dexStatusLabel.Text = "Scanning workspace... Items will appear below."
+    end
+end)
+
+-- Close DEX button
+closeBtn.MouseButton1Click:Connect(function()
+    dexFrame.Visible = false
+    dexToggleBtn.BackgroundColor3 = Color3.fromRGB(64, 68, 75)
+end)
+
+-- Set up workspace watcher callback
+WorkspaceWatcher:AddUpdateCallback(function(hierarchyData)
+    if dexFrame.Visible then
+        LiveDEXGUI:UpdateHierarchyDisplay(dexScrollFrame, hierarchyData)
+        dexStatusLabel.Text = "Live scanning... " .. #hierarchyData .. " items found. Tap items to see properties."
+    end
 end)
