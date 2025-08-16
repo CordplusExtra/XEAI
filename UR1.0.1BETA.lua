@@ -305,7 +305,7 @@ function GameScanner:GetFullState()
         server = self:GetServerInfo(),
         player = { name = player.Name, stats = leaderstats, inventory = inventory },
         executor = ExecutorInfo, -- Include executor information
-        workspace_hierarchy = WorkspaceWatcher:GetHierarchyForGemini() -- New: Live workspace data
+        workspace_hierarchy = (WorkspaceWatcher and WorkspaceWatcher.GetHierarchyForGemini and WorkspaceWatcher:GetHierarchyForGemini()) or {} -- New: Live workspace data
     }
     return state
 end
@@ -733,6 +733,17 @@ end
 --==============================================================================
 local LiveDEXGUI = {}
 LiveDEXGUI.expandedItems = {} -- Track which items are expanded
+-- Class icon mapping (uses lightweight built-in Roblox icons)
+LiveDEXGUI.ICONS = {
+    Default     = "rbxassetid://6031068422", -- folder generic
+    Part        = "rbxassetid://6031068427", -- brick
+    Model       = "rbxassetid://6031071053", -- cube/model
+    Script      = "rbxassetid://6031280882", -- script
+    LocalScript = "rbxassetid://6031280882", -- same as script
+    Humanoid    = "rbxassetid://6031265976", -- humanoid
+    Camera      = "rbxassetid://6031090999", -- camera
+    MoreItems   = "rbxassetid://6031075931"  -- ellipsis / overflow
+}
 
 function LiveDEXGUI:CreateHierarchyFrame(parent)
     local hierarchyFrame = GUI.Create("Frame", {
@@ -792,34 +803,23 @@ function LiveDEXGUI:CreateItemFrame(item, parent, layoutOrder)
         })
     end
     
-    -- Item icon based on class
-    local iconText = "📁" -- Default folder icon
-    if item.ClassName == "Part" then iconText = "🧊"
-    elseif item.ClassName == "Model" then iconText = "🏗️"
-    elseif item.ClassName == "Script" then iconText = "📜"
-    elseif item.ClassName == "LocalScript" then iconText = "📝"
-    elseif item.ClassName == "Humanoid" then iconText = "🚶"
-    elseif item.ClassName == "Camera" then iconText = "📷"
-    elseif item.ClassName == "MoreItems" then iconText = "⋯"
-    end
-    
-    local iconLabel = GUI.Create("TextLabel", {
+    -- Item icon based on class (uses ImageLabel to avoid emoji clipping)
+    local iconAsset = LiveDEXGUI.ICONS[item.ClassName] or LiveDEXGUI.ICONS.Default
+    local iconLabel = GUI.Create("ImageLabel", {
         Parent = itemFrame,
-        Size = UDim2.new(0, 20, 1, 0),
-        Position = UDim2.new(0, indentSize + (expandBtn and 25 or 5), 0, 0),
+        Size = UDim2.new(0, 18, 0, 18),
+        Position = UDim2.new(0, indentSize + (expandBtn and 25 or 5), 0.5, -9),
         BackgroundTransparency = 1,
-        Text = iconText,
-        TextColor3 = Color3.fromRGB(200, 200, 200),
-        Font = Enum.Font.SourceSans,
-        TextSize = 14,
-        TextXAlignment = Enum.TextXAlignment.Center
+        Image = iconAsset,
+        ImageColor3 = Color3.fromRGB(200, 200, 200),
+        ScaleType = Enum.ScaleType.Fit
     })
     
     -- Item name and class
     local nameLabel = GUI.Create("TextLabel", {
         Parent = itemFrame,
-        Size = UDim2.new(1, -(indentSize + 50), 1, 0),
-        Position = UDim2.new(0, indentSize + 30, 0, 0),
+        Size = UDim2.new(1, -(indentSize + (expandBtn and 55 or 35)), 1, 0),
+        Position = UDim2.new(0, indentSize + (expandBtn and 35 or 25), 0, 0),
         BackgroundTransparency = 1,
         Text = item.Name .. " (" .. item.ClassName .. ")",
         TextColor3 = item.ClassName == "MoreItems" and Color3.fromRGB(120, 120, 120) or Color3.fromRGB(220, 220, 220),
