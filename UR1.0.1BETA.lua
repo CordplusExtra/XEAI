@@ -745,7 +745,7 @@ LiveDEXGUI.expandedItems = { ["Workspace_0"] = true } -- Track which items are e
 -- Class icon mapping (uses lightweight built-in Roblox icons)
 LiveDEXGUI.ICONS = {
     Default     = "rbxassetid://6031068422", -- folder generic
-    Workspace   = "rbxassetid://6031068422", -- workspace icon (using folder generic for now)
+    Workspace   = "rbxassetid://123731399627920", -- workspace icon (using folder generic for now)
     Part        = "rbxassetid://6031068427", -- brick
     Model       = "rbxassetid://6031071053", -- cube/model
     Script      = "rbxassetid://6031280882", -- script
