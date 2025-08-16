@@ -547,7 +547,8 @@ function WorkspaceWatcher:ScanInstance(instance, depth, maxDepth)
         Parent = instance.Parent and instance.Parent.Name or "nil",
         Children = {},
         Properties = {},
-        Depth = depth
+        Depth = depth,
+        Icon = instance:GetIcon()
     }
     
     -- Collect key properties based on class type
@@ -804,7 +805,7 @@ function LiveDEXGUI:CreateItemFrame(item, parent, layoutOrder)
     end
     
     -- Item icon based on class (uses ImageLabel to avoid emoji clipping)
-    local iconAsset = LiveDEXGUI.ICONS[item.ClassName] or LiveDEXGUI.ICONS.Default
+    local iconAsset = item.Icon or LiveDEXGUI.ICONS[item.ClassName] or LiveDEXGUI.ICONS.Default
     local iconLabel = GUI.Create("ImageLabel", {
         Parent = itemFrame,
         Size = UDim2.new(0, 18, 0, 18),
