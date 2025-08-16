@@ -596,32 +596,41 @@ end
 function WorkspaceWatcher:PerformScan()
     if not self.isScanning then return end
     
-    local newHierarchy = {}
+    -- Root item representing the Roblox Studio "Workspace"
+    local rootItem = {
+        Name = "Workspace",
+        ClassName = "Workspace",
+        Parent = "nil",
+        Children = {},
+        Properties = {},
+        Depth = 0
+    }
     
-    -- Scan main workspace items
+    -- Scan children of Workspace
     local workspaceChildren = Workspace:GetChildren()
     local itemCount = 0
     
     for _, child in ipairs(workspaceChildren) do
         if itemCount >= self.maxItemsPerLevel then
-            table.insert(newHierarchy, {
+            table.insert(rootItem.Children, {
                 Name = "... (" .. (#workspaceChildren - itemCount) .. " more items)",
                 ClassName = "MoreItems",
                 Children = {},
                 Properties = {},
-                Depth = 0
+                Depth = 1 -- children are one level deeper than root
             })
             break
         end
         
-        local itemData = self:ScanInstance(child, 0, self.scanDepth)
+        local itemData = self:ScanInstance(child, 1, self.scanDepth) -- start depth at 1 because root is 0
         if itemData then
-            table.insert(newHierarchy, itemData)
+            table.insert(rootItem.Children, itemData)
             itemCount = itemCount + 1
         end
     end
     
-    self.hierarchyData = newHierarchy
+    -- Update hierarchy with single root element
+    self.hierarchyData = { rootItem }
     self:NotifyCallbacks()
 end
 
@@ -732,10 +741,11 @@ end
 --// Live DEX GUI Manager
 --==============================================================================
 local LiveDEXGUI = {}
-LiveDEXGUI.expandedItems = {} -- Track which items are expanded
+LiveDEXGUI.expandedItems = { ["Workspace_0"] = true } -- Track which items are expanded (root expanded by default)
 -- Class icon mapping (uses lightweight built-in Roblox icons)
 LiveDEXGUI.ICONS = {
     Default     = "rbxassetid://6031068422", -- folder generic
+    Workspace   = "rbxassetid://6031068422", -- workspace icon (using folder generic for now)
     Part        = "rbxassetid://6031068427", -- brick
     Model       = "rbxassetid://6031071053", -- cube/model
     Script      = "rbxassetid://6031280882", -- script
