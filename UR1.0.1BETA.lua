@@ -26,6 +26,30 @@
     - Retained all previous patches: improved character controls, and legacy chat support
 ]]
 
+--==============================================================================
+--// Icon Asset Definitions
+--==============================================================================
+local IconAssets = {
+    close = "rbxassetid://5054663650",
+    settings = "rbxassetid://1204397029",
+    minimize = "rbxassetid://2406617031",
+    pin = "rbxassetid://6234691350",
+    play = "rbxassetid://4458901886",
+    pause = "rbxassetid://4458893642", 
+    stop = "rbxassetid://4458850803",
+    folder = "rbxassetid://4483345998",
+    script = "rbxassetid://4483362458",
+    localscript = "rbxassetid://4483362925",
+    part = "rbxassetid://4483345875",
+    model = "rbxassetid://4483345998",
+    humanoid = "rbxassetid://4483346302",
+    camera = "rbxassetid://4483345440",
+    expand = "rbxassetid://4483345998",
+    collapse = "rbxassetid://4483345998",
+    search = "rbxassetid://4483345968",
+    refresh = "rbxassetid://4483345875"
+}
+
 --// Services
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
@@ -765,9 +789,12 @@ function LiveDEXGUI:CreateHierarchyFrame(parent)
 end
 
 function LiveDEXGUI:CreateItemFrame(item, parent, layoutOrder)
+    -- Access mobile detection from outer scope
+    local ViewportSize = workspace.CurrentCamera.ViewportSize
+    local isMobile = ViewportSize.X < 800 or ViewportSize.Y < 600
     local itemFrame = GUI.Create("Frame", {
         Parent = parent,
-        Size = UDim2.new(1, -20, 0, 25),
+        Size = UDim2.new(1, -20, 0, 30), -- Increased height from 25 to 30 for better spacing
         BackgroundColor3 = item.ClassName == "MoreItems" and Color3.fromRGB(45, 47, 50) or Color3.fromRGB(40, 42, 46),
         BorderSizePixel = 0,
         LayoutOrder = layoutOrder
@@ -775,57 +802,57 @@ function LiveDEXGUI:CreateItemFrame(item, parent, layoutOrder)
     GUI.Create("UICorner", { Parent = itemFrame, CornerRadius = UDim.new(0, 4) })
     
     -- Indentation based on depth
-    local indentSize = item.Depth * 20
+    local indentSize = item.Depth * 22 -- Increased from 20 to 22 for better spacing
     
     -- Expand/Collapse button (only if has children)
     local expandBtn = nil
     if #item.Children > 0 and item.ClassName ~= "MoreItems" then
-        expandBtn = GUI.Create("TextButton", {
+        -- Larger touch targets for mobile
+        local buttonSize = isMobile and 20 or 16
+        expandBtn = GUI.Create("ImageButton", {
             Parent = itemFrame,
-            Size = UDim2.new(0, 20, 0, 20),
-            Position = UDim2.new(0, indentSize + 2, 0.5, -10),
+            Size = UDim2.new(0, buttonSize, 0, buttonSize),
+            Position = UDim2.new(0, indentSize + 3, 0.5, -buttonSize/2),
             BackgroundTransparency = 1,
-            Text = self.expandedItems[item.Name .. "_" .. item.Depth] and "▼" or "▶",
-            TextColor3 = Color3.fromRGB(150, 150, 150),
-            Font = Enum.Font.SourceSansBold,
-            TextSize = 12
+            ImageColor3 = Color3.fromRGB(150, 150, 150),
+            ScaleType = Enum.ScaleType.Fit,
+            Image = self.expandedItems[item.Name .. "_" .. item.Depth] and IconAssets.collapse or IconAssets.expand
         })
     end
     
-    -- Item icon based on class
-    local iconText = "📁" -- Default folder icon
-    if item.ClassName == "Part" then iconText = "🧊"
-    elseif item.ClassName == "Model" then iconText = "🏗️"
-    elseif item.ClassName == "Script" then iconText = "📜"
-    elseif item.ClassName == "LocalScript" then iconText = "📝"
-    elseif item.ClassName == "Humanoid" then iconText = "🚶"
-    elseif item.ClassName == "Camera" then iconText = "📷"
-    elseif item.ClassName == "MoreItems" then iconText = "⋯"
+    -- Item icon based on class - using proper ImageLabel instead of emoji
+    local iconAsset = IconAssets.folder -- Default folder icon
+    if item.ClassName == "Part" then iconAsset = IconAssets.part
+    elseif item.ClassName == "Model" then iconAsset = IconAssets.model
+    elseif item.ClassName == "Script" then iconAsset = IconAssets.script
+    elseif item.ClassName == "LocalScript" then iconAsset = IconAssets.localscript
+    elseif item.ClassName == "Humanoid" then iconAsset = IconAssets.humanoid
+    elseif item.ClassName == "Camera" then iconAsset = IconAssets.camera
+    elseif item.ClassName == "MoreItems" then iconAsset = IconAssets.folder
     end
     
-    local iconLabel = GUI.Create("TextLabel", {
+    local iconLabel = GUI.Create("ImageLabel", {
         Parent = itemFrame,
-        Size = UDim2.new(0, 20, 1, 0),
-        Position = UDim2.new(0, indentSize + (expandBtn and 25 or 5), 0, 0),
+        Size = UDim2.new(0, 18, 0, 18), -- Proper size for icon
+        Position = UDim2.new(0, indentSize + (expandBtn and 25 or 6), 0.5, -9), -- Centered vertically
         BackgroundTransparency = 1,
-        Text = iconText,
-        TextColor3 = Color3.fromRGB(200, 200, 200),
-        Font = Enum.Font.SourceSans,
-        TextSize = 14,
-        TextXAlignment = Enum.TextXAlignment.Center
+        Image = iconAsset,
+        ImageColor3 = item.ClassName == "MoreItems" and Color3.fromRGB(120, 120, 120) or Color3.fromRGB(200, 200, 200),
+        ScaleType = Enum.ScaleType.Fit
     })
     
     -- Item name and class
     local nameLabel = GUI.Create("TextLabel", {
         Parent = itemFrame,
-        Size = UDim2.new(1, -(indentSize + 50), 1, 0),
-        Position = UDim2.new(0, indentSize + 30, 0, 0),
+        Size = UDim2.new(1, -(indentSize + 60), 1, 0), -- Increased margin from 50 to 60
+        Position = UDim2.new(0, indentSize + 35, 0, 0), -- Adjusted position for better spacing
         BackgroundTransparency = 1,
         Text = item.Name .. " (" .. item.ClassName .. ")",
         TextColor3 = item.ClassName == "MoreItems" and Color3.fromRGB(120, 120, 120) or Color3.fromRGB(220, 220, 220),
         Font = Enum.Font.SourceSans,
         TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center, -- Center text vertically
         TextTruncate = Enum.TextTruncate.AtEnd
     })
     
@@ -867,13 +894,13 @@ function LiveDEXGUI:UpdateHierarchyDisplay(scrollFrame, hierarchyData)
         for _, item in ipairs(items) do
             layoutOrder = layoutOrder + 1
             local itemFrame, expandBtn = self:CreateItemFrame(item, parent, layoutOrder)
-            totalHeight = totalHeight + 27 -- 25 height + 2 padding
+            totalHeight = totalHeight + 32 -- 30 height + 2 padding
             
             if expandBtn then
                 expandBtn.MouseButton1Click:Connect(function()
                     local key = item.Name .. "_" .. item.Depth
                     self.expandedItems[key] = not self.expandedItems[key]
-                    expandBtn.Text = self.expandedItems[key] and "▼" or "▶"
+                    expandBtn.Image = self.expandedItems[key] and IconAssets.collapse or IconAssets.expand
                     
                     -- Refresh display
                     self:UpdateHierarchyDisplay(scrollFrame, hierarchyData)
@@ -896,10 +923,17 @@ end
 --==============================================================================
 --// GUI Manager
 --==============================================================================
+-- Mobile responsiveness: Adjust size based on screen size
+local ViewportSize = workspace.CurrentCamera.ViewportSize
+local isMobile = ViewportSize.X < 800 or ViewportSize.Y < 600
+
+local mainFrameWidth = isMobile and math.min(ViewportSize.X * 0.95, 450) or 480
+local mainFrameHeight = isMobile and math.min(ViewportSize.Y * 0.85, 400) or 360
+
 local mainFrame = GUI.Create("Frame", {
     Parent = screenGui,
-    Size = UDim2.new(0, 480, 0, 360),
-    Position = UDim2.new(0.5, -240, 0.5, -180),
+    Size = UDim2.new(0, mainFrameWidth, 0, mainFrameHeight),
+    Position = UDim2.new(0.5, -mainFrameWidth/2, 0.5, -mainFrameHeight/2),
     BackgroundColor3 = Color3.fromRGB(28, 29, 33),
     BorderSizePixel = 0,
     Active = true,
@@ -916,34 +950,43 @@ GUI.Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = titleBar })
 
 local titleLabel = GUI.Create("TextLabel", {
     Parent = titleBar,
-    Size = UDim2.new(1, -200, 1, 0),
+    Size = UDim2.new(1, -310, 1, 0), -- Increased margin to prevent clipping with buttons
     Position = UDim2.fromScale(0.02, 0),
     BackgroundTransparency = 1,
     Text = "🤖 Gemini 1.5 DEX Client - " .. ExecutorInfo.name,
     Font = Enum.Font.SourceSansBold,
     TextColor3 = Color3.fromRGB(220, 221, 222),
-    TextSize = 16,
-    TextXAlignment = Enum.TextXAlignment.Left
+    TextSize = 14, -- Slightly smaller to prevent clipping
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextYAlignment = Enum.TextYAlignment.Center,
+    TextTruncate = Enum.TextTruncate.AtEnd -- Add truncation for long text
 })
 
--- Live DEX toggle button
+-- Live DEX toggle button with icon - mobile responsive
+local dexBtnWidth = isMobile and 70 or 80
+local dexBtnHeight = isMobile and 28 or 26
 local dexToggleBtn = GUI.Create("TextButton", {
     Parent = titleBar,
-    Size = UDim2.new(0, 70, 0, 24),
-    Position = UDim2.new(1, -185, 0.5, -12),
+    Size = UDim2.new(0, dexBtnWidth, 0, dexBtnHeight),
+    Position = UDim2.new(1, -(195 + (isMobile and 10 or 0)), 0.5, -(dexBtnHeight/2)),
     BackgroundColor3 = Color3.fromRGB(64, 68, 75),
     TextColor3 = Color3.fromRGB(235, 235, 235),
     Font = Enum.Font.SourceSansBold,
-    TextSize = 12,
-    Text = "Live DEX"
+    TextSize = isMobile and 10 or 11,
+    Text = "🔍 Live DEX"
 })
 GUI.Create("UICorner", { Parent = dexToggleBtn, CornerRadius = UDim.new(0, 6) })
 
--- Create Live DEX Watcher Frame
+-- Create Live DEX Watcher Frame with mobile compatibility
+local dexFrameWidth = isMobile and math.min(ViewportSize.X * 0.9, 300) or 320
+local dexFrameHeight = isMobile and math.min(ViewportSize.Y * 0.7, 350) or 400
+local dexXPos = isMobile and 0.5 or 0.5
+local dexXOffset = isMobile and -dexFrameWidth/2 or 180
+
 local dexFrame = GUI.Create("Frame", {
     Parent = screenGui,
-    Size = UDim2.new(0, 320, 0, 400),
-    Position = UDim2.new(0.5, 180, 0.5, -200),
+    Size = UDim2.new(0, dexFrameWidth, 0, dexFrameHeight),
+    Position = UDim2.new(dexXPos, dexXOffset, 0.5, -dexFrameHeight/2),
     BackgroundColor3 = Color3.fromRGB(28, 29, 33),
     BorderSizePixel = 0,
     Active = true,
@@ -971,28 +1014,31 @@ local dexTitleLabel = GUI.Create("TextLabel", {
     TextXAlignment = Enum.TextXAlignment.Left
 })
 
--- DEX Control buttons
-local scanToggleBtn = GUI.Create("TextButton", {
+-- DEX Control buttons with mobile optimization
+local controlButtonSize = isMobile and UDim2.new(0, 40, 0, 28) or UDim2.new(0, 35, 0, 24)
+local controlButtonSpacing = isMobile and -80 or -75
+
+local scanToggleBtn = GUI.Create("ImageButton", {
     Parent = dexTitleBar,
-    Size = UDim2.new(0, 35, 0, 24),
-    Position = UDim2.new(1, -75, 0.5, -12),
+    Size = controlButtonSize,
+    Position = UDim2.new(1, controlButtonSpacing, 0.5, -(controlButtonSize.Y.Offset/2)),
     BackgroundColor3 = Color3.fromRGB(64, 68, 75),
-    TextColor3 = Color3.fromRGB(235, 235, 235),
-    Font = Enum.Font.SourceSansBold,
-    TextSize = 12,
-    Text = "▶"
+    Image = IconAssets.play,
+    ImageColor3 = Color3.fromRGB(235, 235, 235),
+    ScaleType = Enum.ScaleType.Fit,
+    ImageSize = UDim2.new(0, 16, 0, 16)
 })
 GUI.Create("UICorner", { Parent = scanToggleBtn, CornerRadius = UDim.new(0, 6) })
 
-local closeBtn = GUI.Create("TextButton", {
+local closeBtn = GUI.Create("ImageButton", {
     Parent = dexTitleBar,
-    Size = UDim2.new(0, 35, 0, 24),
-    Position = UDim2.new(1, -35, 0.5, -12),
+    Size = controlButtonSize,
+    Position = UDim2.new(1, isMobile and -35 or -35, 0.5, -(controlButtonSize.Y.Offset/2)),
     BackgroundColor3 = Color3.fromRGB(128, 60, 60),
-    TextColor3 = Color3.fromRGB(235, 235, 235),
-    Font = Enum.Font.SourceSansBold,
-    TextSize = 12,
-    Text = "✕"
+    Image = IconAssets.close,
+    ImageColor3 = Color3.fromRGB(235, 235, 235),
+    ScaleType = Enum.ScaleType.Fit,
+    ImageSize = UDim2.new(0, 14, 0, 14)
 })
 GUI.Create("UICorner", { Parent = closeBtn, CornerRadius = UDim.new(0, 6) })
 
@@ -1008,25 +1054,31 @@ local dexStatusLabel = GUI.Create("TextLabel", {
     Font = Enum.Font.SourceSans,
     TextColor3 = Color3.fromRGB(150, 150, 150),
     TextSize = 12,
-    Text = "Click ▶ to start scanning workspace",
+    Text = "Click the play button to start scanning workspace",
     TextWrapped = true
 })
 
--- Auto-Chat toggle
+-- Auto-Chat toggle - mobile responsive
+local chatBtnWidth = isMobile and 95 or 105
+local chatBtnHeight = isMobile and 28 or 26
 local autoChatBtn = GUI.Create("TextButton", {
     Parent = titleBar,
-    Size = UDim2.new(0, 110, 0, 24),
-    Position = UDim2.new(1, -115, 0.5, -12),
+    Size = UDim2.new(0, chatBtnWidth, 0, chatBtnHeight),
+    Position = UDim2.new(1, -(110 + (isMobile and 5 or 0)), 0.5, -(chatBtnHeight/2)),
     BackgroundColor3 = Color3.fromRGB(64, 68, 75),
     TextColor3 = Color3.fromRGB(235, 235, 235),
     Font = Enum.Font.SourceSansBold,
-    TextSize = 14,
-    Text = "Auto-Chat: OFF"
+    TextSize = isMobile and 10 or 11,
+    Text = isMobile and "💬 Auto: OFF" or "💬 Auto-Chat: OFF" -- Shorter text for mobile
 })
 GUI.Create("UICorner", { Parent = autoChatBtn, CornerRadius = UDim.new(0, 6) })
 autoChatBtn.MouseButton1Click:Connect(function()
     Config.AllowAutoChat = not Config.AllowAutoChat
-    autoChatBtn.Text = Config.AllowAutoChat and "Auto-Chat: ON" or "Auto-Chat: OFF"
+    if isMobile then
+        autoChatBtn.Text = Config.AllowAutoChat and "💬 Auto: ON" or "💬 Auto: OFF"
+    else
+        autoChatBtn.Text = Config.AllowAutoChat and "💬 Auto-Chat: ON" or "💬 Auto-Chat: OFF"
+    end
     autoChatBtn.BackgroundColor3 = Config.AllowAutoChat and Color3.fromRGB(56, 97, 56) or Color3.fromRGB(64, 68, 75)
 end)
 
@@ -1040,7 +1092,7 @@ local contentFrame = GUI.Create("Frame", {
 local function createInputBox(placeholder)
     local box = GUI.Create("TextBox", {
         Parent = contentFrame,
-        Size = UDim2.new(1, 0, 0, 35),
+        Size = UDim2.new(1, 0, 0, 38), -- Increased height for better text visibility
         BackgroundColor3 = Color3.fromRGB(40, 41, 46),
         TextColor3 = Color3.fromRGB(220, 221, 222),
         PlaceholderText = placeholder,
@@ -1048,10 +1100,20 @@ local function createInputBox(placeholder)
         Text = "",
         Font = Enum.Font.SourceSans,
         TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center, -- Center text vertically
         ClearTextOnFocus = false,
         Visible = false
     })
-    GUI.Create("UICorner", { Parent = box })
+    GUI.Create("UICorner", { Parent = box, CornerRadius = UDim.new(0, 6) })
+    -- Add padding for better text visibility
+    GUI.Create("UIPadding", {
+        Parent = box,
+        PaddingLeft = UDim.new(0, 10),
+        PaddingRight = UDim.new(0, 10),
+        PaddingTop = UDim.new(0, 8),
+        PaddingBottom = UDim.new(0, 8)
+    })
     return box
 end
 
@@ -1067,19 +1129,21 @@ promptInput.Position = UDim2.new(0, 0, 0, 0)
 
 local responseBox = GUI.Create("ScrollingFrame", {
     Parent = contentFrame,
-    Size = UDim2.new(1, 0, 1, -125),
-    Position = UDim2.new(0, 0, 0, 45),
+    Size = UDim2.new(1, 0, 1, -130), -- Adjusted for new input height
+    Position = UDim2.new(0, 0, 0, 48), -- Adjusted position
     BackgroundColor3 = Color3.fromRGB(40, 41, 46),
     BorderSizePixel = 0,
     CanvasSize = UDim2.new(0, 0, 0, 0),
     ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100),
+    ScrollBarThickness = 8,
     Visible = false
 })
-GUI.Create("UICorner", { Parent = responseBox })
+GUI.Create("UICorner", { Parent = responseBox, CornerRadius = UDim.new(0, 6) })
 
 local responseLabel = GUI.Create("TextLabel", {
     Parent = responseBox,
-    Size = UDim2.new(1, -10, 0, 0),
+    Size = UDim2.new(1, -20, 0, 0), -- More margin for better readability
+    Position = UDim2.new(0, 10, 0, 10), -- Add top and left padding
     BackgroundTransparency = 1,
     TextColor3 = Color3.fromRGB(220, 221, 222),
     Text = "Response will appear here.",
@@ -1093,31 +1157,33 @@ local responseLabel = GUI.Create("TextLabel", {
 
 local submitButton = GUI.Create("TextButton", {
     Parent = contentFrame,
-    Size = UDim2.new(1, 0, 0, 35),
-    Position = UDim2.new(0, 0, 1, -35),
+    Size = UDim2.new(1, 0, 0, 38), -- Consistent height with input boxes
+    Position = UDim2.new(0, 0, 1, -38),
     BackgroundColor3 = Color3.fromRGB(88, 101, 242),
     TextColor3 = Color3.fromRGB(255, 255, 255),
     Text = "Continue",
     Font = Enum.Font.SourceSansBold,
-    TextSize = 16
+    TextSize = 16,
+    TextYAlignment = Enum.TextYAlignment.Center
 })
-GUI.Create("UICorner", { Parent = submitButton })
+GUI.Create("UICorner", { Parent = submitButton, CornerRadius = UDim.new(0, 6) })
 
 local statusLabel = GUI.Create("TextLabel", {
     Parent = contentFrame,
-    Size = UDim2.new(1, 0, 0, 30),
-    Position = UDim2.new(0, 0, 0, 45),
+    Size = UDim2.new(1, 0, 0, 35),
+    Position = UDim2.new(0, 0, 0, 48), -- Adjusted for new input height
     BackgroundTransparency = 1,
     Font = Enum.Font.SourceSans,
     TextColor3 = Color3.fromRGB(180, 180, 180),
     TextSize = 14,
     Text = "Using " .. ExecutorInfo.name .. ". Please provide your Gemini API Key.",
-    TextWrapped = true
+    TextWrapped = true,
+    TextYAlignment = Enum.TextYAlignment.Top
 })
 
 responseLabel.Changed:Connect(function(property)
     if property == "TextBounds" then
-        responseBox.CanvasSize = UDim2.new(0, 0, 0, responseLabel.TextBounds.Y + 20)
+        responseBox.CanvasSize = UDim2.new(0, 0, 0, responseLabel.TextBounds.Y + 30) -- Account for padding
     end
 end)
 
@@ -1272,12 +1338,12 @@ end)
 scanToggleBtn.MouseButton1Click:Connect(function()
     if WorkspaceWatcher.isScanning then
         WorkspaceWatcher:StopScanning()
-        scanToggleBtn.Text = "▶"
+        scanToggleBtn.Image = IconAssets.play
         scanToggleBtn.BackgroundColor3 = Color3.fromRGB(64, 68, 75)
-        dexStatusLabel.Text = "Scanning stopped. Click ▶ to restart."
+        dexStatusLabel.Text = "Scanning stopped. Click play button to restart."
     else
         WorkspaceWatcher:StartScanning()
-        scanToggleBtn.Text = "⏸"
+        scanToggleBtn.Image = IconAssets.pause
         scanToggleBtn.BackgroundColor3 = Color3.fromRGB(56, 97, 56)
         dexStatusLabel.Text = "Scanning workspace... Items will appear below."
     end
