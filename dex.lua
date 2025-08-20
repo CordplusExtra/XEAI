@@ -12732,4 +12732,4 @@ end)()
 
 -- Start
 Main.Init()
-
+return Main
