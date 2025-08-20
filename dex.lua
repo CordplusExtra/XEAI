@@ -6,7 +6,6 @@
 	Modified for Infinite Yield
 
 	Dex is a debugging suite designed to help the user debug games and find any potential vulnerabilities.
--Modified Version
 ]]
 
 local nodes = {}
@@ -11810,11 +11809,15 @@ Main = (function()
 		return moduleData
 	end
 
+	-- Replace the entire Main.LoadModules function in dexEdited.lua.txt with this:
+
 	Main.LoadModules = function()
 		for i,v in pairs(Main.ModuleList) do
 			local s,e = pcall(Main.LoadModule,v)
 			if not s then
 				Main.Error(("FAILED LOADING %s CAUSE %s"):format(v, e))
+				
+				Main.GenerateHierarchyDump = Explorer.GenerateFullHierarchyDump
 			end
 		end
 
@@ -11841,6 +11844,8 @@ Main = (function()
 				control.InitAfterMain(appTable)
 			end
 		end
+
+		-- Expose the hierarchy dump function for external use by our AI
 		Main.GenerateHierarchyDump = Explorer.GenerateFullHierarchyDump
 	end
 
