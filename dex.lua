@@ -11837,6 +11837,8 @@ Main = (function()
 			Notebook = Notebook
 		}
 
+   if Explorer and Explorer.GenerateFullHierarchyDump then Main.GenerateHierarchyDump = Explorer.GenerateFullHierarchyDump end
+
 		Main.AppControls.Lib.InitAfterMain(appTable)
 		for i,v in pairs(Main.ModuleList) do
 			local control = Main.AppControls[v]
@@ -11844,9 +11846,6 @@ Main = (function()
 				control.InitAfterMain(appTable)
 			end
 		end
-
-		-- Expose the hierarchy dump function for external use by our AI
-		Main.GenerateHierarchyDump = Explorer.GenerateFullHierarchyDump
 	end
 
 	Main.InitEnv = function()
