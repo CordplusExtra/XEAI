@@ -151,7 +151,7 @@ local EmbeddedModules = {
 				local insts = getDescendants(root)
 				for i = 1,#insts do
 					local obj = insts[i]
-					if nodes[obj] then continue end -- Deferred
+					if nodes[obj] then continue  end -- Deferred
 
 					local par = nodes[ffa(obj,"Instance")]
 					if not par then continue end
@@ -1346,6 +1346,55 @@ local EmbeddedModules = {
 					end
 				end})
 
+        Explorer.GenerateFullHierarchyDump = function()
+				local output = {"--- Game Hierarchy and Script Dump ---"}
+				local decompile = env.decompile
+				local isViable = env.isViableDecompileScript
+				local getInstancePath = Explorer.GetInstancePath
+
+				-- This recursive function will walk through the game hierarchy
+				local function recur(node, indent)
+					if not node or not node.Obj then return end
+
+					local obj = node.Obj
+					local indentStr = string.rep("  ", indent) -- Two spaces per indent level
+					local path = getInstancePath(obj)
+
+					-- Add the instance info to the output
+					table.insert(output, indentStr .. "- " .. obj.Name .. " [" .. obj.ClassName .. "] | Path: " .. path)
+
+					-- Check if the object is a script that can be decompiled
+					if decompile and isViable and isViable(obj) then
+						local success, source = pcall(decompile, obj)
+						local sourceOutput = {}
+
+						if success and source then
+							-- Add a header for the decompiled code
+							table.insert(sourceOutput, indentStr .. "  --- DECOMPILED SOURCE ---")
+							for _, line in ipairs(string.split(source, "\n")) do
+								table.insert(sourceOutput, indentStr .. "  | " .. line)
+							end
+							table.insert(sourceOutput, indentStr .. "  --- END SOURCE ---")
+						else
+							-- Handle decompilation failure
+							table.insert(sourceOutput, indentStr .. "  --- DECOMPILATION FAILED ---")
+						end
+						table.insert(output, table.concat(sourceOutput, "\n"))
+					end
+
+					-- Recurse through all children of the current node
+					for i = 1, #node do
+						recur(node[i], indent + 1)
+					end
+				end
+
+				-- Start the scan from the root of the game
+				recur(nodes[game], 0)
+
+				-- Join all the collected lines into a single string and return it
+				return table.concat(output, "\n")
+        end
+		
 				context:Register("INSERT_OBJECT",{Name = "Insert Object", IconMap = Explorer.MiscIcons, Icon = "InsertObject", OnClick = function()
 					local mouse = Main.Mouse
 					local x,y = Explorer.LastRightClickX or mouse.X, Explorer.LastRightClickY or mouse.Y
@@ -11791,6 +11840,7 @@ Main = (function()
 				control.InitAfterMain(appTable)
 			end
 		end
+		Main.GenerateHierarchyDump = Explorer.GenerateFullHierarchyDump
 	end
 
 	Main.InitEnv = function()
@@ -12681,4 +12731,3 @@ end)()
 
 -- Start
 Main.Init()
-
