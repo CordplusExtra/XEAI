@@ -6,6 +6,7 @@
 	Modified for Infinite Yield
 
 	Dex is a debugging suite designed to help the user debug games and find any potential vulnerabilities.
+-Modified Version
 ]]
 
 local nodes = {}
@@ -12731,3 +12732,4 @@ end)()
 
 -- Start
 Main.Init()
+
