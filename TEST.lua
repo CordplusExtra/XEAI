@@ -31,7 +31,7 @@ local oldgame = game
 local game = workspace.Parent
 
 local EmbeddedModules = {
-Explorer = function()
+	Explorer = function()
 --[[
 	Explorer App Module
 	
@@ -882,56 +882,6 @@ Explorer = function()
 				end
 			end
 
-			-- FIX: Moved GenerateFullHierarchyDump out of InitRightClick to ensure it's defined when the module is loaded.
-			Explorer.GenerateFullHierarchyDump = function()
-				local output = {"--- Game Hierarchy and Script Dump ---"}
-				local decompile = env.decompile
-				local isViable = env.isViableDecompileScript
-				local getInstancePath = Explorer.GetInstancePath
-
-				-- This recursive function will walk through the game hierarchy
-				local function recur(node, indent)
-					if not node or not node.Obj then return end
-
-					local obj = node.Obj
-					local indentStr = string.rep("  ", indent) -- Two spaces per indent level
-					local path = getInstancePath(obj)
-
-					-- Add the instance info to the output
-					table.insert(output, indentStr .. "- " .. obj.Name .. " [" .. obj.ClassName .. "] | Path: " .. path)
-
-					-- Check if the object is a script that can be decompiled
-					if decompile and isViable and isViable(obj) then
-						local success, source = pcall(decompile, obj)
-						local sourceOutput = {}
-
-						if success and source then
-							-- Add a header for the decompiled code
-							table.insert(sourceOutput, indentStr .. "  --- DECOMPILED SOURCE ---")
-							for _, line in ipairs(string.split(source, "\n")) do
-								table.insert(sourceOutput, indentStr .. "  | " .. line)
-							end
-							table.insert(sourceOutput, indentStr .. "  --- END SOURCE ---")
-						else
-							-- Handle decompilation failure
-							table.insert(sourceOutput, indentStr .. "  --- DECOMPILATION FAILED ---")
-						end
-						table.insert(output, table.concat(sourceOutput, "\n"))
-					end
-
-					-- Recurse through all children of the current node
-					for i = 1, #node do
-						recur(node[i], indent + 1)
-					end
-				end
-
-				-- Start the scan from the root of the game
-				recur(nodes[game], 0)
-
-				-- Join all the collected lines into a single string and return it
-				return table.concat(output, "\n")
-			end
-			
 			Explorer.ShowRightClick = function(MousePos)
 				local Mouse = MousePos or Main.Mouse
 				local context = Explorer.RightClickContext
@@ -1373,7 +1323,7 @@ Explorer = function()
 				-- this code is very bad but im lazy and it works so cope
 				local clth = function(str)
 					if str:sub(1, 28) == "game:GetService(\"Workspace\")" then str = str:gsub("game:GetService%(\"Workspace\"%)", "workspace", 1) end
-					if str:sub(1, 27 + #plr.Name) == "game:GetService(\"Players\").." .. plr.Name then str = str:gsub("game:GetService%(\"Players\"%).." .. plr.Name, "game:GetService(\"Players\").LocalPlayer", 1) end
+					if str:sub(1, 27 + #plr.Name) == "game:GetService(\"Players\")." .. plr.Name then str = str:gsub("game:GetService%(\"Players\"%)." .. plr.Name, "game:GetService(\"Players\").LocalPlayer", 1) end
 					return str
 				end
 
@@ -1395,6 +1345,55 @@ Explorer = function()
 						env.setclipboard(table.concat(resList,"\n"))
 					end
 				end})
+
+        Explorer.GenerateFullHierarchyDump = function()
+				local output = {"--- Game Hierarchy and Script Dump ---"}
+				local decompile = env.decompile
+				local isViable = env.isViableDecompileScript
+				local getInstancePath = Explorer.GetInstancePath
+
+				-- This recursive function will walk through the game hierarchy
+				local function recur(node, indent)
+					if not node or not node.Obj then return end
+
+					local obj = node.Obj
+					local indentStr = string.rep("  ", indent) -- Two spaces per indent level
+					local path = getInstancePath(obj)
+
+					-- Add the instance info to the output
+					table.insert(output, indentStr .. "- " .. obj.Name .. " [" .. obj.ClassName .. "] | Path: " .. path)
+
+					-- Check if the object is a script that can be decompiled
+					if decompile and isViable and isViable(obj) then
+						local success, source = pcall(decompile, obj)
+						local sourceOutput = {}
+
+						if success and source then
+							-- Add a header for the decompiled code
+							table.insert(sourceOutput, indentStr .. "  --- DECOMPILED SOURCE ---")
+							for _, line in ipairs(string.split(source, "\n")) do
+								table.insert(sourceOutput, indentStr .. "  | " .. line)
+							end
+							table.insert(sourceOutput, indentStr .. "  --- END SOURCE ---")
+						else
+							-- Handle decompilation failure
+							table.insert(sourceOutput, indentStr .. "  --- DECOMPILATION FAILED ---")
+						end
+						table.insert(output, table.concat(sourceOutput, "\n"))
+					end
+
+					-- Recurse through all children of the current node
+					for i = 1, #node do
+						recur(node[i], indent + 1)
+					end
+				end
+
+				-- Start the scan from the root of the game
+				recur(nodes[game], 0)
+
+				-- Join all the collected lines into a single string and return it
+				return table.concat(output, "\n")
+        end
 		
 				context:Register("INSERT_OBJECT",{Name = "Insert Object", IconMap = Explorer.MiscIcons, Icon = "InsertObject", OnClick = function()
 					local mouse = Main.Mouse
@@ -1810,7 +1809,8 @@ Explorer = function()
 				table.clear(searchResults)
 				expanded = (#query == 0 and Explorer.Expanded) or Explorer.SearchExpanded
 
-				local tostr = tostring; local tfind = table.find;
+				local tostr = tostring;
+				local tfind = table.find;
 
 				local Filters = Explorer._SearchFilters
 				local expandTable = Explorer.SearchExpanded
@@ -2335,7 +2335,6 @@ Explorer = function()
 
 		return {InitDeps = initDeps, InitAfterMain = initAfterMain, Main = main}
 	end,
-
 	Properties = function()
 --[[
 	Properties App Module
@@ -11810,8 +11809,6 @@ Main = (function()
 		return moduleData
 	end
 
-	-- Replace the entire Main.LoadModules function in dexEdited.lua.txt with this:
-
 	Main.LoadModules = function()
 		for i,v in pairs(Main.ModuleList) do
 			local s,e = pcall(Main.LoadModule,v)
@@ -11837,8 +11834,6 @@ Main = (function()
 			SaveInstance = SaveInstance,
 			Notebook = Notebook
 		}
-
-   if Explorer and Explorer.GenerateFullHierarchyDump then Main.GenerateHierarchyDump = Explorer.GenerateFullHierarchyDump end
 
 		Main.AppControls.Lib.InitAfterMain(appTable)
 		for i,v in pairs(Main.ModuleList) do
